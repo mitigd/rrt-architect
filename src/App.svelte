@@ -20,26 +20,24 @@
         numPremises: number;
         autoProgress: boolean;
         
-        // Time Settings
         useQuestionTimer: boolean;
-        questionTimeLimit: number; // Seconds
-        sessionLengthMinutes: number; // Minutes
-        disableSessionTimer: boolean; // Infinite Mode
+        questionTimeLimit: number;
+        sessionLengthMinutes: number;
+        disableSessionTimer: boolean;
 
         blindMode: boolean;
         symbolMode: SymbolMode;
         
-        // Advanced Features
         enableDeictic: boolean;        
         enableTransformation: boolean; 
         enableInterference: boolean;
         enableCipher: boolean;
-        enableMovement: boolean; // NEW: Path Integration
+        enableMovement: boolean;
     }
 
     interface GameHistory {
         date: string;
-        timestamp: number; // For sorting
+        timestamp: number;
         totalScore: number;
         accuracy: number;
         questionsAnswered: number;
@@ -47,8 +45,6 @@
         avgReactionTime: number; 
         reactionTimeByDepth: Record<number, number>; 
         sessionDurationSeconds: number;
-        
-        // Context for Charting
         activeModes: string[]; 
         activeModifiers: string[];
     }
@@ -69,14 +65,11 @@
     const EMOJIS = ["🚀", "💎", "🔥", "🌊", "⚡", "🍄", "👁️", "🎲", "🧬", "🔮", "⚓", "🪐", "🌋", "🦠", "🌌", "💊", "🧿", "🧩", "🧸", "💣"];
     const NONSENSE_CONSONANTS = "BCDFGHJKLMNPQRSTVWXYZ";
     const NONSENSE_VOWELS = "AEIOU";
-    
-    // Cipher Vocabulary
     const CIPHER_WORDS = ["ZAX", "JOP", "KIV", "LUZ", "MEC", "VEX", "QOD", "WIB", "HAF", "GUK", "YIN", "BEX", "DUB", "ROZ", "NIX", "POK"];
 
     // --- State ---
     let phase: GamePhase = "SETUP";
     
-    // Default Settings
     let settings: GameSettings = {
         activeModes: { LINEAR: true, DISTINCTION: true, SPATIAL_2D: true, SPATIAL_3D: false, HIERARCHY: true },
         numPremises: 2,
@@ -91,26 +84,25 @@
         enableTransformation: false,
         enableInterference: false,
         enableCipher: false,
-        enableMovement: false // Default OFF
+        enableMovement: false 
     };
 
-    // Round State
     let premises: string[] = [];
     let currentQuestion = "";
     let expectedAnswer = false;
     let currentRoundMode: RftMode = "LINEAR";
     
-    // Advanced Features State
     let contextIsNight = false; 
     let activeModifiers: string[] = [];
+    
+    // Interference State
     let interferenceTargetColor = "";
     let interferenceCurrentColor = "";
+    let interferenceStatus = "WAIT"; // WAIT, HIT, MISS
     
-    // Cipher State
     let currentCipherMap: Record<string, string> = {};
     let cipherHasChanged = false;
 
-    // Session Accumulators
     let currentScore = 0;
     let currentStreak = 0;
     let maxStreak = 0;
@@ -118,16 +110,13 @@
     let questionsCorrect = 0;
     let maxDepthReached = 2;
     
-    // Performance Metrics
     let questionStartTime = 0;
     let totalReactionTime = 0;
     let reactionTimesByDepth: Record<number, number[]> = {}; 
 
-    // Data Storage
     let history: GameHistory[] = [];
     let sessionLog: SessionRecord[] = [];
 
-    // Timers
     let sessionSecondsRemaining = 0;
     let sessionSecondsElapsed = 0;
     let sessionInterval: any;
@@ -138,32 +127,23 @@
     let isYesRight = true;
     let feedbackMsg = "";
     
-    // Modals
     let showSettings = false;
     let showReviewModal = false;
     let showHistoryModal = false;
 
-    // --- Chart Variables ---
     let chartCanvas: HTMLCanvasElement;
     let chartInstance: Chart | null = null;
 
-    // --- Initialization ---
     onMount(() => {
         const storedHist = localStorage.getItem("rft_architect_history");
-        if (storedHist) {
-            try { history = JSON.parse(storedHist); } catch (e) { console.error(e); }
-        }
+        if (storedHist) { try { history = JSON.parse(storedHist); } catch (e) { console.error(e); } }
 
         const storedSettings = localStorage.getItem("rft_architect_settings");
         if (storedSettings) {
             try { 
                 const parsed = JSON.parse(storedSettings);
                 const defaultModes = { LINEAR: true, DISTINCTION: true, SPATIAL_2D: true, SPATIAL_3D: false, HIERARCHY: true };
-                settings = { 
-                    ...settings, 
-                    ...parsed, 
-                    activeModes: { ...defaultModes, ...(parsed.activeModes || {}) } 
-                };
+                settings = { ...settings, ...parsed, activeModes: { ...defaultModes, ...(parsed.activeModes || {}) } };
             } catch (e) { console.error(e); }
         }
     });
@@ -175,25 +155,18 @@
         if (chartInstance) chartInstance.destroy();
     });
 
-    function saveSettings() {
-        localStorage.setItem("rft_architect_settings", JSON.stringify(settings));
-    }
+    function saveSettings() { localStorage.setItem("rft_architect_settings", JSON.stringify(settings)); }
 
-    // --- CHART RENDERER (IMPROVEMENT TRACKING) ---
+    // --- CHARTING ---
     async function renderChart() {
         await tick();
         if (!chartCanvas) return;
         if (chartInstance) chartInstance.destroy();
-
-        // Sort history chronologically
         const sortedHistory = [...history].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        
-        // Limit to last 20 sessions for readability
         const chartData = sortedHistory.slice(-20);
-
         if (chartData.length === 0) return;
 
-        const labels = chartData.map(h => h.date.split(" ")[0]); // Just the date part
+        const labels = chartData.map(h => h.date.split(" ")[0]);
         const accuracies = chartData.map(h => h.accuracy);
         const scores = chartData.map(h => h.totalScore);
 
@@ -229,49 +202,19 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { labels: { color: '#fff' } },
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.9)',
                         titleColor: '#00ff9d',
-                        bodyColor: '#fff',
-                        callbacks: {
-                            afterBody: (tooltipItems) => {
-                                const index = tooltipItems[0].dataIndex;
-                                const record = chartData[index];
-                                let lines = [];
-                                lines.push(`Depth: ${record.highestDepth}`);
-                                if (record.activeModes) lines.push(`Modes: ${record.activeModes.join(", ")}`);
-                                if (record.activeModifiers && record.activeModifiers.length) lines.push(`Mods: ${record.activeModifiers.join(", ")}`);
-                                return lines;
-                            }
-                        }
+                        bodyColor: '#fff'
                     }
                 },
                 scales: {
                     x: { grid: { color: '#444' }, ticks: { color: '#ccc' } },
-                    y: { 
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        min: 0, 
-                        max: 100,
-                        title: { display: true, text: 'Accuracy %', color: '#00ff9d' },
-                        grid: { color: '#333' }, 
-                        ticks: { color: '#ccc' } 
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'Score', color: '#00f2ff' },
-                        ticks: { color: '#ccc' }
-                    }
+                    y: { type: 'linear', display: true, position: 'left', min: 0, max: 100, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#ccc' } }
                 }
             }
         });
@@ -330,7 +273,7 @@
             "GREATER", "LESS", "SAME", "DIFFERENT", "CONTAINS", "INSIDE", 
             "NORTH", "SOUTH", "EAST", "WEST", "ABOVE", "BELOW",
             "LEFT", "RIGHT", "FRONT", "BEHIND",
-            "START", "FACE", "WALK", "TURN" // Added for Movement mode
+            "START", "FACE", "WALK", "TURN"
         ];
         const shuffledWords = shuffleArray([...CIPHER_WORDS]);
         currentCipherMap = {};
@@ -341,22 +284,18 @@
 
     function makePremise(a: string, relation: string, b: string): string {
         if (settings.enableCipher) {
-             let keyword = relation;
              const lookup = relation.replace("is ", "").replace(" than", "").replace(" of", "").replace("the ", "").replace(" as", "").replace("from", "").trim();
-             
-             if (currentCipherMap[lookup]) {
-                 return `${a} <b>${currentCipherMap[lookup]}</b> ${b}`;
-             }
+             if (currentCipherMap[lookup]) return `${a} <b>${currentCipherMap[lookup]}</b> ${b}`;
         }
         return `${a} ${relation} ${b}`;
     }
 
-    // --- ENGINES ---
+    // --- ENGINES (Logic Modules) ---
+    // ... (These remain largely the same, just ensuring string generation matches)
     function generateLinear() {
         const count = settings.numPremises + 1;
         const items = generateSymbols(count);
         const generatedPremises: string[] = [];
-        
         for (let i = 0; i < count - 1; i++) {
             const a = items[i];
             const b = items[i + 1];
@@ -365,10 +304,8 @@
         }
         const [idxA, idxB] = getDistinctRandomIndices(count);
         const qType = Math.random() > 0.5 ? "GREATER" : "LESS";
-        
         const qRel = settings.enableCipher ? currentCipherMap[qType] : qType;
         currentQuestion = `Is ${items[idxA]} ${qRel} ${settings.enableCipher ? '' : 'than'} ${items[idxB]}?`;
-        
         const actuallyGreater = idxA < idxB;
         if (qType === "GREATER") expectedAnswer = actuallyGreater; else expectedAnswer = !actuallyGreater;
         premises = shuffleArray(generatedPremises);
@@ -380,21 +317,17 @@
         const values: number[] = [];
         const generatedPremises: string[] = [];
         values[0] = Math.random() > 0.5 ? 1 : 0;
-        
         for (let i = 0; i < count - 1; i++) {
             const isSame = Math.random() > 0.5;
             values.push(isSame ? values[i] : 1 - values[i]);
             const relText = isSame ? "SAME" : "DIFFERENT";
             generatedPremises.push(makePremise(items[i], relText, items[i + 1]));
         }
-        
         const [idxA, idxB] = getDistinctRandomIndices(count);
         const areActuallySame = values[idxA] === values[idxB];
         const qType = Math.random() > 0.5 ? "SAME" : "DIFFERENT";
-        
         const qRel = settings.enableCipher ? currentCipherMap[qType] : (qType === "SAME" ? "the SAME as" : "DIFFERENT from");
         currentQuestion = `Is ${items[idxA]} ${qRel} ${items[idxB]}?`;
-        
         expectedAnswer = qType === "SAME" ? areActuallySame : !areActuallySame;
         premises = shuffleArray(generatedPremises);
     }
@@ -403,14 +336,9 @@
         const count = settings.numPremises + 1;
         const items = generateSymbols(count);
         const generatedPremises: string[] = [];
-        
-        for (let i = 0; i < count - 1; i++) {
-            generatedPremises.push(makePremise(items[i], "CONTAINS", items[i+1]));
-        }
-        
+        for (let i = 0; i < count - 1; i++) { generatedPremises.push(makePremise(items[i], "CONTAINS", items[i+1])); }
         const [idxA, idxB] = getDistinctRandomIndices(count);
         const actuallyInside = idxA > idxB; 
-        
         if (Math.random() > 0.5) { 
             const qRel = settings.enableCipher ? currentCipherMap["INSIDE"] : "inside";
             currentQuestion = `Is ${items[idxA]} ${qRel} ${items[idxB]}?`; 
@@ -430,7 +358,6 @@
         let cx = 0, cy = 0, cz = 0;
         positions.push({ x: 0, y: 0, z: 0 });
 
-        // 1. Generate the Map (Premises)
         for (let i = 0; i < settings.numPremises; i++) {
             const a = items[i];
             const b = items[i + 1];
@@ -445,35 +372,26 @@
                 case 4: dz = 1; text = "ABOVE"; break;
                 case 5: dz = -1; text = "BELOW"; break;
             }
-            generatedPremises.push(makePremise(b, text, a)); // "B is North of A"
+            generatedPremises.push(makePremise(b, text, a));
             cx += dx; cy += dy; cz += dz;
             positions.push({ x: cx, y: cy, z: cz });
         }
         premises = shuffleArray(generatedPremises);
 
-        // --- MOVEMENT / PATH INTEGRATION LOGIC ---
         if (settings.enableMovement && !is3D && Math.random() > 0.3) {
             activeModifiers.push("MOVEMENT");
-            
-            // 1. Pick a random starting item
             const startIdx = Math.floor(Math.random() * items.length);
             let curX = positions[startIdx].x;
             let curY = positions[startIdx].y;
-            
-            // 2. Define Heading (0:N, 1:E, 2:S, 3:W)
             let heading = Math.floor(Math.random() * 4);
             const headingNames = ["NORTH", "EAST", "SOUTH", "WEST"];
-            
-            // 3. Generate Instruction Strings
             let instructions = [];
             const cStart = settings.enableCipher ? currentCipherMap["START"] : "Start at";
             const cFace = settings.enableCipher ? currentCipherMap["FACE"] : "Face";
             const hName = settings.enableCipher ? currentCipherMap[headingNames[heading]] : headingNames[heading];
-            
             instructions.push(`${cStart} ${items[startIdx]}. ${cFace} ${hName}.`);
 
-            // 4. Generate Moves (Walk/Turn)
-            const moves = 2 + Math.floor(Math.random() * 2); // 2 to 3 steps
+            const moves = 2 + Math.floor(Math.random() * 2);
             const cWalk = settings.enableCipher ? currentCipherMap["WALK"] : "Walk";
             const cTurn = settings.enableCipher ? currentCipherMap["TURN"] : "Turn";
             const cLeft = settings.enableCipher ? currentCipherMap["LEFT"] : "LEFT";
@@ -482,46 +400,23 @@
             for(let m=0; m<moves; m++) {
                 const action = Math.random();
                 if (action < 0.5) {
-                    // Move Forward
-                    if(heading === 0) curY++;
-                    else if(heading === 1) curX++;
-                    else if(heading === 2) curY--;
-                    else if(heading === 3) curX--;
+                    if(heading === 0) curY++; else if(heading === 1) curX++; else if(heading === 2) curY--; else if(heading === 3) curX--;
                     instructions.push(`${cWalk} 1.`);
                 } else {
-                    // Turn
-                    if (Math.random() > 0.5) {
-                        heading = (heading + 1) % 4; // Right
-                        instructions.push(`${cTurn} ${cRight}.`);
-                    } else {
-                        heading = (heading + 3) % 4; // Left
-                        instructions.push(`${cTurn} ${cLeft}.`);
-                    }
+                    if (Math.random() > 0.5) { heading = (heading + 1) % 4; instructions.push(`${cTurn} ${cRight}.`); } 
+                    else { heading = (heading + 3) % 4; instructions.push(`${cTurn} ${cLeft}.`); }
                 }
             }
-
-            // 5. Calculate relationship to a random target
-            // We are now at (curX, curY) facing 'heading'
             const targetIdx = Math.floor(Math.random() * items.length);
             const targetPos = positions[targetIdx];
-            
-            // Vector from Current Pos to Target
             const relX = targetPos.x - curX;
             const relY = targetPos.y - curY;
 
-            // Check if we landed exactly on the target
             if (relX === 0 && relY === 0) {
                 currentQuestion = `${instructions.join(" ")} <br><br> Are you at ${items[targetIdx]}?`;
                 expectedAnswer = true;
                 return;
             }
-
-            // Coordinate transformation based on heading
-            // If facing North (0): dx=relX, dy=relY
-            // If facing East (1):  dx=relY, dy=-relX
-            // If facing South (2): dx=-relX, dy=-relY
-            // If facing West (3):  dx=-relY, dy=relX
-            
             let localX = 0, localY = 0;
             if (heading === 0) { localX = relX; localY = relY; }
             else if (heading === 1) { localX = relY; localY = -relX; }
@@ -534,16 +429,12 @@
             else if (localX > 0) trueRel = "RIGHT";
             else if (localX < 0) trueRel = "LEFT";
             
-            // Generate Question
             const qTypeRaw = ["FRONT", "BEHIND", "LEFT", "RIGHT"][Math.floor(Math.random()*4)];
             const qType = settings.enableCipher ? currentCipherMap[qTypeRaw] : qTypeRaw;
-            
             currentQuestion = `${instructions.join(" ")} <br><br> Is ${items[targetIdx]} to your ${qType}?`;
             expectedAnswer = (trueRel === qTypeRaw);
 
-        } 
-        // --- DEICTIC LOGIC (Existing) ---
-        else if (settings.enableDeictic && !is3D && Math.random() > 0.4) {
+        } else if (settings.enableDeictic && !is3D && Math.random() > 0.4) {
             activeModifiers.push("DEICTIC");
             let indices = [0,0,0].map(() => Math.floor(Math.random() * items.length));
             while (indices[0] === indices[1] || indices[1] === indices[2] || indices[0] === indices[2]) {
@@ -551,64 +442,38 @@
             }
             const [uIdx, fIdx, tIdx] = indices;
             const uPos = positions[uIdx], fPos = positions[fIdx], tPos = positions[tIdx];
-            
             const fVec = { x: fPos.x - uPos.x, y: fPos.y - uPos.y };
             const tVec = { x: tPos.x - uPos.x, y: tPos.y - uPos.y };
             const cross = fVec.x * tVec.y - fVec.y * tVec.x;
             const dot = fVec.x * tVec.x + fVec.y * tVec.y;
-
             let relation = "";
             if (cross > 0.1) relation = "LEFT"; else if (cross < -0.1) relation = "RIGHT"; else if (dot > 0) relation = "FRONT"; else relation = "BEHIND";
-            
             if (relation === "") { generateSpatial(false); return; }
-
             const qTypeRaw = Math.random() > 0.5 ? "LEFT" : "RIGHT";
             const qRel = settings.enableCipher ? currentCipherMap[qTypeRaw] : qTypeRaw;
-            
             currentQuestion = `If you are at ${items[uIdx]} facing ${items[fIdx]}, is ${items[tIdx]} to your ${qRel}?`;
             expectedAnswer = (relation === qTypeRaw);
-        } 
-        // --- STANDARD SPATIAL LOGIC ---
-        else {
+        } else {
             const [idxA, idxB] = getDistinctRandomIndices(items.length);
             const diffX = positions[idxB].x - positions[idxA].x;
             const diffY = positions[idxB].y - positions[idxA].y;
             const diffZ = positions[idxB].z - positions[idxA].z;
-            
             let parts = [];
-            if (is3D) {
-                if (diffZ > 0) parts.push("ABOVE"); else if (diffZ < 0) parts.push("BELOW");
-            }
-            
+            if (is3D) { if (diffZ > 0) parts.push("ABOVE"); else if (diffZ < 0) parts.push("BELOW"); }
             let compass = "";
             if (diffY > 0) compass += "NORTH"; else if (diffY < 0) compass += "SOUTH";
             if (diffX > 0) compass += (compass ? "-" : "") + "EAST"; else if (diffX < 0) compass += (compass ? "-" : "") + "WEST";
             if (compass) parts.push(compass);
-            
             let trueRel = "at the SAME LOCATION as";
             if (parts.length > 0) {
-                if (settings.enableCipher && parts.length === 1 && currentCipherMap[parts[0]]) {
-                    trueRel = currentCipherMap[parts[0]];
-                } else {
-                    trueRel = parts.join(" and ") + (parts[0].includes("SAME") ? "" : " of");
-                }
+                if (settings.enableCipher && parts.length === 1 && currentCipherMap[parts[0]]) trueRel = currentCipherMap[parts[0]];
+                else trueRel = parts.join(" and ") + (parts[0].includes("SAME") ? "" : " of");
             }
-            
-            const fakeDirs = is3D 
-                ? ["NORTH", "SOUTH", "EAST", "WEST", "ABOVE", "BELOW"] 
-                : ["NORTH", "SOUTH", "EAST", "WEST"];
-                
+            const fakeDirs = is3D ? ["NORTH", "SOUTH", "EAST", "WEST", "ABOVE", "BELOW"] : ["NORTH", "SOUTH", "EAST", "WEST"];
             const rawFake = fakeDirs[Math.floor(Math.random() * fakeDirs.length)];
             const fake = settings.enableCipher ? currentCipherMap[rawFake] : (rawFake + " of");
-            
-            if (Math.random() > 0.5) { 
-                currentQuestion = `Is ${items[idxB]} ${trueRel} ${items[idxA]}?`; 
-                expectedAnswer = true; 
-            } else { 
-                const qText = fake === trueRel ? "NOT " + fake : fake;
-                currentQuestion = `Is ${items[idxB]} ${qText} ${items[idxA]}?`; 
-                expectedAnswer = false; 
-            }
+            if (Math.random() > 0.5) { currentQuestion = `Is ${items[idxB]} ${trueRel} ${items[idxA]}?`; expectedAnswer = true; } 
+            else { const qText = fake === trueRel ? "NOT " + fake : fake; currentQuestion = `Is ${items[idxB]} ${qText} ${items[idxA]}?`; expectedAnswer = false; }
         }
     }
 
@@ -616,12 +481,8 @@
     function startSession() {
         currentScore = 0; currentStreak = 0; questionsAttempted = 0; questionsCorrect = 0;
         maxDepthReached = settings.numPremises; sessionLog = []; totalReactionTime = 0; reactionTimesByDepth = {};
-        
-        sessionSecondsElapsed = 0; 
-        sessionSecondsRemaining = settings.sessionLengthMinutes * 60;
-        
+        sessionSecondsElapsed = 0; sessionSecondsRemaining = settings.sessionLengthMinutes * 60;
         generateCipherKey(); 
-        
         clearInterval(sessionInterval);
         sessionInterval = setInterval(() => {
             sessionSecondsElapsed++;
@@ -630,7 +491,6 @@
                 if (sessionSecondsRemaining <= 0) endSession();
             }
         }, 1000);
-        
         startRound();
     }
 
@@ -642,8 +502,6 @@
             const sum = times.reduce((a,b) => a+b, 0);
             rtByDepth[parseInt(d)] = Math.round(sum / times.length);
         }
-        
-        // Capture Active Modes for History
         const activeM = Object.keys(settings.activeModes).filter(k => settings.activeModes[k as RftMode]);
         const activeMods = [];
         if (settings.blindMode) activeMods.push("BLIND");
@@ -682,7 +540,6 @@
 
     function startRound() {
         if (!settings.disableSessionTimer && sessionSecondsRemaining <= 0) { endSession(); return; }
-        
         const enabledModes = (Object.keys(settings.activeModes) as RftMode[]).filter((k) => settings.activeModes[k]);
         if (enabledModes.length === 0) { alert("Please enable at least one Logic Module in Config."); return; }
         
@@ -721,18 +578,23 @@
 
     function finishMemorization() { if (settings.enableInterference) startInterferencePhase(); else startQuestionPhase(); }
 
+    // --- ACTIVE INTERFERENCE LOGIC ---
     function startInterferencePhase() {
-        phase = "INTERFERENCE"; activeModifiers.push("INTERFERENCE");
+        phase = "INTERFERENCE"; 
+        activeModifiers.push("INTERFERENCE");
+        interferenceStatus = "WAIT";
         const colors = ["red", "blue", "green", "yellow"];
         interferenceTargetColor = colors[Math.floor(Math.random() * colors.length)];
-        let interferenceTime = 0; const duration = 3000; 
+        
         clearInterval(interferenceInterval);
+        // Fast cycle (300ms)
         interferenceInterval = setInterval(() => {
-            interferenceTime += 500; interferenceCurrentColor = colors[Math.floor(Math.random() * colors.length)];
-            if (interferenceTime >= duration) { clearInterval(interferenceInterval); startQuestionPhase(); }
-        }, 500);
+            interferenceCurrentColor = colors[Math.floor(Math.random() * colors.length)];
+            interferenceStatus = "WAIT"; // Reset status on new color
+        }, 300);
     }
 
+    // --- MAIN LOGIC ---
     function startQuestionPhase() {
         phase = "QUESTION"; questionStartTime = Date.now(); 
         if (settings.useQuestionTimer) {
@@ -774,14 +636,25 @@
         sessionLog = [sessionRec, ...sessionLog]; saveSettings(); phase = "RESULT";
     }
     
-    // --- CONTROLS ---
+    // --- KEYBOARD & HELPERS ---
     function handleKeydown(e: KeyboardEvent) {
         if (showSettings || showReviewModal || showHistoryModal) { if (e.code === "Escape") { showSettings = false; showReviewModal = false; showHistoryModal = false; } return; }
         if (phase === "SETUP" && e.code === "Enter") startSession();
         if (phase === "RESULT" && (e.code === "Enter" || e.code === "Space")) startRound();
         if (phase === "SESSION_END" && e.code === "Enter") phase = "SETUP";
         if (phase === "PREMISE_MEMORIZE" && (e.code === "Space" || e.code === "Enter")) finishMemorization();
-        if (phase === "INTERFERENCE" && e.code === "Space") { clearInterval(interferenceInterval); startQuestionPhase(); }
+        
+        // Active Interference Control
+        if (phase === "INTERFERENCE" && e.code === "Space") {
+            if (interferenceCurrentColor === interferenceTargetColor) {
+                interferenceStatus = "HIT";
+                clearInterval(interferenceInterval);
+                setTimeout(startQuestionPhase, 200); // Short pause to show success
+            } else {
+                interferenceStatus = "MISS"; // Visual penalty
+            }
+        }
+
         if (phase === "QUESTION") {
             if (e.code === "ArrowLeft" || e.code === "KeyD") handleAnswer(!isYesRight);
             if (e.code === "ArrowRight" || e.code === "KeyJ") handleAnswer(isYesRight);
@@ -790,13 +663,24 @@
     function formatTime(s: number) { const m = Math.floor(s / 60).toString().padStart(2, "0"); const sec = (s % 60).toString().padStart(2, "0"); return `${m}:${sec}`; }
     function getDurationLabel(h: GameHistory) { return h.sessionDurationSeconds ? formatTime(h.sessionDurationSeconds) : "N/A"; }
     
+    // Context-Aware Cipher Helper
+    function getRelevantCipherKeys() {
+        if (!settings.enableCipher) return [];
+        // Scan Question and Premises for cipher keys active in this round
+        const textToScan = (currentQuestion + premises.join(" ")).toUpperCase();
+        return Object.entries(currentCipherMap).filter(([meaning, word]) => {
+            // Check if the nonsense word (value) appears in the text
+            return textToScan.includes(word);
+        });
+    }
+    
     function getCipherList() {
         if (!settings.enableCipher) return [];
         return Object.entries(currentCipherMap).filter(([k,v]) => {
             if (currentRoundMode === "LINEAR" && (k === "GREATER" || k === "LESS")) return true;
             if (currentRoundMode === "DISTINCTION" && (k === "SAME" || k === "DIFFERENT")) return true;
             if (currentRoundMode === "HIERARCHY" && (k === "CONTAINS" || k === "INSIDE")) return true;
-            if ((currentRoundMode === "SPATIAL_2D" || currentRoundMode === "SPATIAL_3D")) return true; // Show all for spatial
+            if ((currentRoundMode === "SPATIAL_2D" || currentRoundMode === "SPATIAL_3D")) return true;
             return false;
         });
     }
@@ -837,7 +721,6 @@
             <button class="close-btn" on:click={() => { showSettings = false; saveSettings(); }}>X</button>
         </div>
         <div class="sidebar-content">
-            
             <div class="sidebar-section">
                 <h3>TIME CONTROLS</h3>
                 <div class="control-group">
@@ -847,7 +730,6 @@
                         <button class="toggle-btn {!settings.disableSessionTimer ? 'active' : ''}" on:click={() => settings.disableSessionTimer = false}>Timed</button>
                     </div>
                 </div>
-
                 {#if !settings.disableSessionTimer}
                 <div class="control-group">
                     <label>Session Minutes</label>
@@ -858,7 +740,6 @@
                     </div>
                 </div>
                 {/if}
-
                 <div class="control-group">
                     <label>Question Timer (Sec)</label>
                       <div class="number-input">
@@ -869,7 +750,6 @@
                 </div>
                 <label class="check-row compact"><input type="checkbox" bind:checked={settings.useQuestionTimer} /> <span>Enable Question Timer</span></label>
             </div>
-
             <div class="sidebar-section">
                 <h3>LOGIC MODULES</h3>
                 <label class="check-row"><input type="checkbox" bind:checked={settings.activeModes["LINEAR"]} /> <span>Linear Relation</span></label>
@@ -877,14 +757,12 @@
                 <label class="check-row"><input type="checkbox" bind:checked={settings.activeModes["SPATIAL_2D"]} /> <span>Spatial 2D</span></label>
                 <label class="check-row"><input type="checkbox" bind:checked={settings.activeModes["SPATIAL_3D"]} /> <span>Spatial 3D</span></label>
                 <label class="check-row"><input type="checkbox" bind:checked={settings.activeModes["HIERARCHY"]} /> <span>Hierarchy</span></label>
-                
                 <div class="divider"></div>
                 <label class="check-row highlight-check">
                     <input type="checkbox" bind:checked={settings.enableCipher} /> 
                     <div><span>Derived/Cipher Mode</span> <small class="desc">Uses unknown words for logic.</small></div>
                 </label>
             </div>
-
             <div class="sidebar-section highlight-section">
                 <h3>WALL BREAKERS</h3>
                 <label class="check-row">
@@ -901,10 +779,9 @@
                 </label>
                 <label class="check-row">
                     <input type="checkbox" bind:checked={settings.enableInterference} /> 
-                    <div><span>Interference Task</span> <small class="desc">Distractor phase</small></div>
+                    <div><span>Interference Task</span> <small class="desc">Active Distractor (Press Space)</small></div>
                 </label>
             </div>
-
             <div class="sidebar-section">
                 <h3>COMPLEXITY</h3>
                 <div class="control-group">
@@ -917,7 +794,6 @@
                 </div>
                 <label class="check-row compact"><input type="checkbox" bind:checked={settings.autoProgress} /> <span>Auto-Progress Difficulty</span></label>
                 <label class="check-row compact"><input type="checkbox" bind:checked={settings.blindMode} /> <span>Blind Mode (Memory)</span></label>
-                
                 <div class="control-group" style="margin-top: 15px;">
                     <label>Symbol Type</label>
                     <select bind:value={settings.symbolMode} class="styled-select">
@@ -928,7 +804,6 @@
                     </select>
                 </div>
             </div>
-
              <div class="sidebar-footer">
                 <button class="btn-large start" on:click={() => { showSettings = false; saveSettings(); }}>SAVE & CLOSE</button>
             </div>
@@ -947,11 +822,8 @@
                 </div>
             </div>
             <div class="history-content">
-                <div class="chart-container">
-                    <canvas bind:this={chartCanvas}></canvas>
-                 </div>
-                 <div class="chart-legend">Track your improvement over sessions.</div>
-
+                <div class="chart-container"><canvas bind:this={chartCanvas}></canvas></div>
+                <div class="chart-legend">Improvement over sessions (Acc vs Score)</div>
                 <div class="log-list">
                     {#if history.length === 0}
                         <div class="empty-msg">No sessions recorded.</div>
@@ -971,7 +843,6 @@
                                         {#if h.activeModes && h.activeModes.includes("SPATIAL_2D")}<span class="badge">2D</span>{/if}
                                         {#if h.activeModifiers && h.activeModifiers.includes("MOVE")}<span class="badge move">MOVE</span>{/if}
                                         {#if h.activeModifiers && h.activeModifiers.includes("CIPHER")}<span class="badge cipher">CIPHER</span>{/if}
-                                        {#if !h.activeModifiers || h.activeModifiers.length === 0}<span class="badge">STD</span>{/if}
                                     </div>
                                     <span class="duration-tag">⏱ {getDurationLabel(h)}</span>
                                 </div>
@@ -1002,9 +873,7 @@
                                     {#each log.modifiers as m}<span class="mod-tag">{m}</span>{/each}
                                 </div>
                                 <div class="review-premises">
-                                    {#each log.premises as p}
-                                        <div class="rp-line">{@html p}</div>
-                                    {/each}
+                                    {#each log.premises as p}<div class="rp-line">{@html p}</div>{/each}
                                 </div>
                                 <div class="review-q">Q: {@html log.question}</div>
                                 <div class="review-ans">
@@ -1039,10 +908,15 @@
                 </div>
 
             {:else if phase === "INTERFERENCE"}
-                <div class="interference-box">
-                    <h3>INTERFERENCE PATTERN</h3>
+                <div class="interference-box {interferenceStatus === 'MISS' ? 'shake-anim' : ''}">
+                    <h3>ACTIVE INTERFERENCE</h3>
                     <div class="color-dot" style="background-color: {interferenceCurrentColor};"></div>
-                    <p class="small">Target: {interferenceTargetColor}</p>
+                    <p class="instruction-interfere">
+                        Press <strong>SPACE</strong> when color is <span style="color:{interferenceTargetColor}; text-transform:uppercase; font-weight:bold;">{interferenceTargetColor}</span>
+                    </p>
+                    {#if interferenceStatus === "MISS"}
+                        <div class="interfere-feedback fail">MISSED!</div>
+                    {/if}
                 </div>
 
             {:else if phase === "PREMISE_MEMORIZE"}
@@ -1072,6 +946,17 @@
 
             {:else if phase === "QUESTION"}
                 <div class="active-game-layout">
+                    {#if settings.enableCipher}
+                        {@const relevantKeys = getRelevantCipherKeys()}
+                        {#if relevantKeys.length > 0}
+                            <div class="mini-cipher-hint">
+                                {#each relevantKeys as [k, v]}
+                                    <span class="mc-item"><b>{v}</b>={k}</span>
+                                {/each}
+                            </div>
+                        {/if}
+                    {/if}
+
                     {#if !settings.blindMode}
                         <div class="premise-box compact">
                             <div class="mode-badge">{currentRoundMode}</div>
@@ -1195,7 +1080,14 @@
     .cipher-item { font-size: 0.8rem; background: #222; padding: 4px; border-radius: 3px; }
     .cipher-word { color: var(--color-solution); font-weight: bold; }
     .alert-banner { background: var(--color-exclusion); color: white; padding: 8px; text-align: center; font-weight: bold; margin-bottom: 10px; border-radius: 4px; animation: flash 1s infinite alternate; }
+    
+    /* MINI CIPHER HINT */
+    .mini-cipher-hint { background: #1a1a1a; border-bottom: 1px solid #444; padding: 8px; font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 10px; border-radius: 4px; }
+    .mc-item b { color: var(--color-solution); }
+
     @keyframes flash { from { opacity: 0.8; } to { opacity: 1; } }
+    @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-5px); } 100% { transform: translateX(0); } }
+    .shake-anim { animation: shake 0.3s; border-color: red; }
 
     /* Chart & History */
     .chart-container { height: 200px; width: 100%; background: #222; margin-bottom: 10px; border-radius: 4px; }
@@ -1237,8 +1129,12 @@
     .premise-line { font-size: 1.2rem; margin: 5px 0; } .premise-line.small { font-size: 0.9rem; opacity: 0.8; }
     .mode-badge { font-size: 0.7rem; background: #444; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
     
-    .interference-box { height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .color-dot { width: 80px; height: 80px; border-radius: 50%; margin: 20px; border: 4px solid #fff; }
+    /* Interference */
+    .interference-box { height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #444; background: #222; border-radius: 8px; width: 100%; }
+    .color-dot { width: 100px; height: 100px; border-radius: 50%; margin: 20px; border: 4px solid #fff; transition: background-color 0.1s; }
+    .instruction-interfere { font-size: 1.1rem; margin-top: 10px; }
+    .interfere-feedback { font-weight: bold; font-size: 1.5rem; margin-top: 10px; }
+    .interfere-feedback.fail { color: var(--color-exclusion); }
 
     .question-text { font-size: 1.8rem; color: var(--accent-primary); margin: 20px 0; }
     .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 400px; }
