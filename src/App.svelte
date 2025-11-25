@@ -65,8 +65,12 @@
     const EMOJIS = ["🚀", "💎", "🔥", "🌊", "⚡", "🍄", "👁️", "🎲", "🧬", "🔮", "⚓", "🪐", "🌋", "🦠", "🌌", "💊", "🧿", "🧩", "🧸", "💣"];
     const NONSENSE_CONSONANTS = "BCDFGHJKLMNPQRSTVWXYZ";
     const NONSENSE_VOWELS = "AEIOU";
-    const CIPHER_WORDS = ["ZAX", "JOP", "KIV", "LUZ", "MEC", "VEX", "QOD", "WIB", "HAF", "GUK", "YIN", "BEX", "DUB", "ROZ", "NIX", "POK"];
-
+    const CIPHER_WORDS = [
+        "ZAX", "JOP", "KIV", "LUZ", "MEC", "VEX", "QOD", "WIB", "HAF", "GUK", 
+        "YIN", "BEX", "DUB", "ROZ", "NIX", "POK", "VOM", "JEX", "KAZ", "QUZ", 
+        "YEP", "WUX", "FIP", "GOZ"
+    ];
+    
     // --- State ---
     let phase: GamePhase = "SETUP";
     
@@ -291,7 +295,6 @@
     }
 
     // --- ENGINES (Logic Modules) ---
-    // ... (These remain largely the same, just ensuring string generation matches)
     function generateLinear() {
         const count = settings.numPremises + 1;
         const items = generateSymbols(count);
@@ -1031,7 +1034,7 @@
     .settings-btn.restart { border-color: var(--color-exclusion); color: var(--color-exclusion); }
 
     /* Sidebar */
-    .sidebar { position: fixed; top: 0; right: -360px; width: 340px; height: 100%; background: var(--bg-surface); border-left: 2px solid var(--color-solution); z-index: 200; transition: right 0.3s; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
+    .sidebar { padding-top:55px; position: fixed; top: 0; right: -360px; width: 340px; height: 100%; background: var(--bg-surface); border-left: 2px solid var(--color-solution); z-index: 200; transition: right 0.3s; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
     .sidebar.open { right: 0; }
     .sidebar-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 150; }
     .sidebar-header { padding: 15px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; background: #252525; }
