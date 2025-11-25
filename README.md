@@ -1,10 +1,10 @@
-# RFT Architect
+# RRT Architect
 
 [Play Now](https://mitigd.github.io/rrt-architect/)
 
 ## Overview
 
-RFT Architect is a cognitive training application based on the principles of Relational Frame Theory (RFT). It generates procedural logic puzzles that require the user to derive relationships between abstract symbols. The application focuses on Relational Fluency—the ability to manipulate mental models and derive non-explicit relationships across different frames of reference.
+RRT (Relational Reasoning Training) Architect is a cognitive training application based on the principles of Relational Frame Theory (RFT). It generates procedural logic puzzles that require the user to derive relationships between abstract symbols. The application focuses on Relational Fluency—the ability to manipulate mental models and derive non-explicit relationships across different frames of reference.
 
 ## Core Logic Modules
 
